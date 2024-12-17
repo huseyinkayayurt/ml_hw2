@@ -1,0 +1,48 @@
+# Python Cache Files
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+env/
+
+# Jupyter Notebook Checkpoints (if used)
+.ipynb_checkpoints/
+
+# MacOS specific files
+.DS_Store
+
+# Model and Intermediate Training Files
+*.h5
+*.pth
+*.ckpt
+saved_models/
+*.log
+
+# Output Files (Images, Plots, etc.)
+*.png
+*.jpg
+*.jpeg
+*.gif
+
+# Dataset Files
+dataset.txt
+
+# Temporary files and Logs
+*.log
+*.tmp
+*.out
+
+# Python Package Files
+*.egg-info/
+*.eggs/
+dist/
+build/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Additional Files
+results
+*.png
