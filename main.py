@@ -1,39 +1,50 @@
 import time
 import os
 
+from ann.metrics import print_metrics, plot_metrics_bar_text
 from data_set.generator import MoonDataGenerator
 from data_set.splitter import split_data
 from data_set.visualize import save_plot
 from ann.model import ANN
-from ann.train import train_sgd, train_batch_gd, train_mini_batch_gd
+from ann.train import train_sgd, train_batch_gd, train_mini_batch_gd, evaluate_model
 from ann.visualize import plot_loss, plot_decision_boundary
 
 
-def train_and_evaluate(hidden_layers, X_train, y_train, X_val, y_val, training_method, method_name):
+def train_and_evaluate(model_name, model, train_func, X_train, y_train, X_val, y_val, X_test, y_test, train_params, results_dir):
     """
-    Verilen gizli katman sayısına ve eğitim metoduna göre ağı eğitir ve sonuçları kaydeder.
+    Modeli eğitir, değerlendirir ve sonuçları görselleştirir.
+
+    Args:
+        model_name (str): Modelin adı.
+        model (ANN): ANN modeli.
+        train_func (function): Eğitim fonksiyonu (train_sgd, train_batch_gd, vb.).
+        X_train, y_train: Eğitim verileri.
+        X_val, y_val: Doğrulama verileri.
+        X_test, y_test: Test verileri.
+        train_params (dict): Eğitim parametreleri (epochs, batch_size, vb.).
+        results_dir (str): Sonuçların kaydedileceği dizin.
+
+    Returns:
+        None
     """
-    print(f"\n{len(hidden_layers)} Gizli Katmanlı Ağ - {method_name} ile Eğitim:")
-    model = ANN(input_dim=2, hidden_layers=hidden_layers, output_dim=1, learning_rate=0.1)
+    print(f"\n{model_name} - Eğitim Başlıyor:")
 
-    # Eğitim
-    if training_method == "sgd":
-        train_loss, val_loss = train_sgd(model, X_train, y_train, X_val, y_val, epochs=1000)
-    elif training_method == "batch_gd":
-        train_loss, val_loss = train_batch_gd(model, X_train, y_train, X_val, y_val, epochs=1000)
-    elif training_method == "mini_batch_gd":
-        train_loss, val_loss = train_mini_batch_gd(model, X_train, y_train, X_val, y_val, batch_size=32, epochs=1000)
-    else:
-        raise ValueError("Geçersiz eğitim yöntemi")
+    # Modeli eğit
+    train_loss, val_loss = train_func(model, X_train, y_train, X_val, y_val, **train_params)
 
-    # Loss grafiği
-    plot_loss(train_loss, val_loss, f"{method_name} Loss Grafiği ({len(hidden_layers)} Katman)",
-              save_path=f"results/{method_name.lower()}_loss_{len(hidden_layers)}layer.png")
+    # Tahminler
+    y_train_pred = evaluate_model(model, X_train, y_train)
+    y_val_pred = evaluate_model(model, X_val, y_val)
+    y_test_pred = evaluate_model(model, X_test, y_test)
 
-    # Karar sınırı grafiği
-    plot_decision_boundary(model, X_train, y_train,
-                           f"{method_name} Karar Sınırı ({len(hidden_layers)} Katman)",
-                           save_path=f"results/{method_name.lower()}_boundary_{len(hidden_layers)}layer.png")
+    # Metrikleri yazdır ve görselleştir
+    train_metrics = print_metrics("Eğitim", y_train, y_train_pred, model_name)
+    val_metrics = print_metrics("Doğrulama", y_val, y_val_pred, model_name)
+    test_metrics = print_metrics("Test", y_test, y_test_pred, model_name)
+
+    plot_metrics_bar_text([train_metrics, val_metrics, test_metrics], model_name)
+    plot_loss(train_loss, val_loss, f"{model_name} Loss Grafiği", save_path=f"{results_dir}/{model_name.lower()}_loss.png")
+    plot_decision_boundary(model, X_train, y_train, f"{model_name} Karar Sınırı", save_path=f"{results_dir}/{model_name.lower()}_boundary.png")
 
 
 def main():
@@ -54,28 +65,34 @@ def main():
     save_plot(X_test, y_test, filename="data_set/make_moons_dataset_test.png")
 
     # Klasörleri oluştur
-    os.makedirs("results", exist_ok=True)
+    results_dir = "results"
+    os.makedirs(results_dir, exist_ok=True)
 
-    # Gizli katman yapıları
-    layer_configs = {
-        "1 Katman": [8],
-        "2 Katman": [16, 8],
-        "3 Katman": [32, 16, 8]
-    }
+    # Model parametreleri ve eğitim fonksiyonları
+    models = [
+        {"name": "1 Gizli Katman - SGD", "hidden_layers": [6], "learning_rate": 0.1, "train_func": train_sgd, "train_params": {"epochs": 1000}},
+        {"name": "1 Gizli Katman - Batch", "hidden_layers": [8], "learning_rate": 0.1, "train_func": train_batch_gd,
+         "train_params": {"epochs": 1500}},
+        {"name": "1 Gizli Katman - Mini-Batch", "hidden_layers": [6], "learning_rate": 0.1, "train_func": train_mini_batch_gd,
+         "train_params": {"batch_size": 16, "epochs": 200}},
+        {"name": "2 Gizli Katman - SGD", "hidden_layers": [10, 6], "learning_rate": 0.1, "train_func": train_sgd, "train_params": {"epochs": 1800}},
+        {"name": "2 Gizli Katman - Batch", "hidden_layers": [10, 6], "learning_rate": 1.0, "train_func": train_batch_gd,
+         "train_params": {"epochs": 2500}},
+        {"name": "2 Gizli Katman - Mini-Batch", "hidden_layers": [10, 6], "learning_rate": 0.1, "train_func": train_mini_batch_gd,
+         "train_params": {"batch_size": 16, "epochs": 1000}},
+        {"name": "3 Gizli Katman - SGD", "hidden_layers": [14, 10, 6], "learning_rate": 0.1, "train_func": train_sgd,
+         "train_params": {"epochs": 1300}},
+        {"name": "3 Gizli Katman - Batch", "hidden_layers": [14, 10, 6], "learning_rate": 5.0, "train_func": train_batch_gd,
+         "train_params": {"epochs": 2000}},
+        {"name": "3 Gizli Katman - Mini-Batch", "hidden_layers": [14, 10, 6], "learning_rate": 0.2, "train_func": train_mini_batch_gd,
+         "train_params": {"batch_size": 8, "epochs": 1000}},
+    ]
 
-    # Eğitim yöntemleri
-    training_methods = {
-        "SGD": "sgd",
-        "Batch GD": "batch_gd",
-        "Mini-Batch GD": "mini_batch_gd"
-    }
-
-    # Tüm yapı ve eğitim yöntemleri için döngü
-    for config_name, hidden_layers in layer_configs.items():
-        for method_name, method in training_methods.items():
-            train_and_evaluate(hidden_layers, X_train, y_train, X_val, y_val, method, method_name)
-
-    print("\nEğitim tamamlandı. Sonuçlar 'results/' klasörüne kaydedildi.")
+    # Modelleri eğit ve değerlendir
+    for model_config in models:
+        model = ANN(input_dim=2, hidden_layers=model_config["hidden_layers"], output_dim=1, learning_rate=model_config["learning_rate"])
+        train_and_evaluate(model_config["name"], model, model_config["train_func"], X_train, y_train, X_val, y_val, X_test, y_test,
+                           model_config["train_params"], results_dir)
 
 
 if __name__ == '__main__':

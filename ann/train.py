@@ -1,5 +1,4 @@
 import numpy as np
-from ann.model import ANN
 
 
 def train_sgd(model, X_train, y_train, X_val, y_val, epochs=1000):
@@ -47,7 +46,7 @@ def train_sgd(model, X_train, y_train, X_val, y_val, epochs=1000):
     return training_loss, validation_loss
 
 
-def train_batch_gd(model, X_train, y_train, X_val, y_val, epochs=1000):
+def train_batch_gd(model, X_train, y_train, X_val, y_val, epochs):
     """
     Batch Gradient Descent algoritması ile modeli eğitir.
     """
@@ -119,3 +118,18 @@ def train_mini_batch_gd(model, X_train, y_train, X_val, y_val, batch_size=32, ep
             print(f"Epoch {epoch + 1}/{epochs} - Training Loss: {avg_epoch_loss:.4f}, Validation Loss: {val_loss:.4f}")
 
     return training_loss, validation_loss
+
+
+def evaluate_model(model, X, y):
+    """
+    Modeli değerlendirir ve tahminleri döner.
+    Args:
+        model: Eğitimli ANN modeli.
+        X: Giriş verisi.
+        y: Gerçek etiketler.
+    Returns:
+        y_pred: Tahmin edilen etiketler.
+    """
+    output = model.forward(X)
+    y_pred = (output >= 0.5).astype(int)  # Sigmoid çıktısını sınıf etiketi 0/1'e dönüştür
+    return y_pred
