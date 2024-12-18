@@ -45,4 +45,5 @@ build/
 
 # Additional Files
 results
+results_svm
 *.png

@@ -1,5 +1,6 @@
 import time
 import os
+import itertools
 
 from ann.metrics import print_metrics, plot_metrics_bar_text
 from data_set.generator import MoonDataGenerator
@@ -8,6 +9,7 @@ from data_set.visualize import save_plot
 from ann.model import ANN
 from ann.train import train_sgd, train_batch_gd, train_mini_batch_gd, evaluate_model
 from ann.visualize import plot_loss, plot_decision_boundary
+from svm.model import train_evaluate_svm_with_params, plot_decision_boundary_svm, compute_metrics, plot_confusion_matrix
 
 
 def train_and_evaluate(model_name, model, train_func, X_train, y_train, X_val, y_val, X_test, y_test, train_params, results_dir):
@@ -47,6 +49,55 @@ def train_and_evaluate(model_name, model, train_func, X_train, y_train, X_val, y
     plot_decision_boundary(model, X_train, y_train, f"{model_name} Karar Sınırı", save_path=f"{results_dir}/{model_name.lower()}_boundary.png")
 
 
+def evaluate_best_model(best_model, X_train, y_train, X_val, y_val, X_test, y_test, folder):
+    """
+    En iyi modeli eğitim, doğrulama ve test veri setlerinde değerlendirir.
+    Args:
+        best_model: En iyi SVM modeli.
+        X_train, y_train: Eğitim veri seti.
+        X_val, y_val: Doğrulama veri seti.
+        X_test, y_test: Test veri seti.
+    """
+    # Eğitim, doğrulama ve test tahminleri
+    y_train_pred = best_model.predict(X_train)
+    y_val_pred = best_model.predict(X_val)
+    y_test_pred = best_model.predict(X_test)
+
+    # Performans metrikleri
+    train_metrics = compute_metrics(y_train, y_train_pred)
+    val_metrics = compute_metrics(y_val, y_val_pred)
+    test_metrics = compute_metrics(y_test, y_test_pred)
+
+    # Confusion matrix görselleştirme
+    plot_confusion_matrix(y_train, y_train_pred, "Eğitim Seti - Confusion Matrix", f"{folder}/confusion_matrix_train.png")
+    plot_confusion_matrix(y_val, y_val_pred, "Doğrulama Seti - Confusion Matrix", f"{folder}/confusion_matrix_val.png")
+    plot_confusion_matrix(y_test, y_test_pred, "Test Seti - Confusion Matrix", f"{folder}/confusion_matrix_test.png")
+
+    # Performans metriklerini konsola yazdır
+    print("\nPerformans Metrikleri:")
+    print(f"Eğitim Seti: {train_metrics}")
+    print(f"Doğrulama Seti: {val_metrics}")
+    print(f"Test Seti: {test_metrics}")
+
+
+def print_best_model_info(best_model, best_params):
+    """
+    En iyi modelin kernel ve parametre bilgilerini yazdırır.
+    Args:
+        best_model: En iyi SVM modeli.
+        best_params: En iyi modelin parametreleri.
+    """
+    print("\nEn İyi Model Bilgileri:")
+    print(f"Kernel Türü: {best_params.get('kernel', 'Bilinmiyor')}")
+    print(f"C (Regularization): {best_params.get('C', 'Bilinmiyor')}")
+    print(f"Gamma: {best_params.get('gamma', 'Bilinmiyor')}")
+    print(f"Degree (Polinom Kernel için): {best_params.get('degree', 'Bilinmiyor')}")
+
+    # Modelin özeti
+    print("\nModel Özeti:")
+    print(best_model)
+
+
 def main():
     # Veri kümesi oluşturucu sınıfını başlat
     generator = MoonDataGenerator(n_samples=400, noise=0.2, random_state=42)
@@ -66,7 +117,9 @@ def main():
 
     # Klasörleri oluştur
     results_dir = "results"
+    results_svm_dir = "results_svm"
     os.makedirs(results_dir, exist_ok=True)
+    os.makedirs(results_svm_dir, exist_ok=True)
 
     # Model parametreleri ve eğitim fonksiyonları
     models = [
@@ -93,6 +146,67 @@ def main():
         model = ANN(input_dim=2, hidden_layers=model_config["hidden_layers"], output_dim=1, learning_rate=model_config["learning_rate"])
         train_and_evaluate(model_config["name"], model, model_config["train_func"], X_train, y_train, X_val, y_val, X_test, y_test,
                            model_config["train_params"], results_dir)
+
+    ###### SVM #####
+    # Parametre Grid'i
+    kernels = ['linear', 'poly', 'rbf']
+    C_values = [0.1, 1, 10]
+    gamma_values = [0.01, 0.1, 1]  # Sadece poly ve rbf için
+
+    best_params = {}
+    best_model = None
+    metrics = None
+    y_train = y_train.ravel()
+    y_val = y_val.ravel()
+
+    for kernel in kernels:
+        best_score = -1
+        best_model = None
+        print(f"\nSVM - {kernel.upper()} kernel denemeleri:")
+
+        # Parametre kombinasyonlarını oluştur
+        if kernel in ['linear']:
+            param_grid = itertools.product(C_values, [None])  # Linear için gamma yok
+        else:
+            param_grid = itertools.product(C_values, gamma_values)
+
+        for C, gamma in param_grid:
+            print(f"Denenen parametreler -> C: {C}, Gamma: {gamma}")
+
+            # Modeli eğit ve doğrulama metriklerini hesapla
+            gamma_param = 'scale' if gamma is None else gamma
+            metrics, model = train_evaluate_svm_with_params(kernel, C, gamma_param, X_train, y_train, X_val, y_val)
+
+            print(
+                f"Accuracy: {metrics['accuracy']:.4f}, Precision: {metrics['precision']:.4f}, Recall: {metrics['recall']:.4f}, F1-Score: {metrics['f1']:.4f}")
+
+            # En iyi sonucu kontrol et
+            if metrics['f1'] > best_score:
+                best_score = metrics['f1']
+                best_params[kernel] = {"C": C, "gamma": gamma, "metrics": metrics}
+                best_params = {  # En iyi parametreleri doldur
+                    "kernel": kernel,
+                    "C": C,
+                    "gamma": gamma if gamma is not None else 'scale',
+                    "degree": 'Bilinmiyor' if kernel != 'poly' else 'Polinom Derecesi'  # Polinom kernel yoksa bilinmiyor
+                }
+                best_model = model
+
+        # En iyi modeli ve karar sınırını kaydet
+        print(f"\nEn iyi {kernel.upper()} kernel parametreleri: C: {best_params['C']}, Gamma: {best_params['gamma']}")
+        print(f"Metrics: {metrics}")
+        plot_decision_boundary_svm(best_model, X_train, y_train, f"SVM {kernel.upper()} En İyi Karar Sınırı",
+                                   f"{results_svm_dir}/svm_best_boundary_{kernel}.png")
+
+        # Tüm kernel'ler için en iyi sonuçları yazdır
+    print("\nEn İyi SVM Sonuçları:")
+    print_best_model_info(best_model, best_params)
+
+    # En iyi modeli yazdır
+    print_best_model_info(best_model, best_params)
+    # En iyi modeli değerlendirin
+    print("\nEn iyi model ile değerlendirme başlıyor...")
+    evaluate_best_model(best_model, X_train, y_train, X_val, y_val, X_test, y_test, results_svm_dir)
 
 
 if __name__ == '__main__':
