@@ -124,7 +124,7 @@ def main():
     # Model parametreleri ve eğitim fonksiyonları
     models = [
         {"name": "1 Gizli Katman - SGD", "hidden_layers": [6], "learning_rate": 0.1, "train_func": train_sgd, "train_params": {"epochs": 1000}},
-        {"name": "1 Gizli Katman - Batch", "hidden_layers": [8], "learning_rate": 0.1, "train_func": train_batch_gd,
+        {"name": "1 Gizli Katman - Batch", "hidden_layers": [6], "learning_rate": 0.1, "train_func": train_batch_gd,
          "train_params": {"epochs": 1500}},
         {"name": "1 Gizli Katman - Mini-Batch", "hidden_layers": [6], "learning_rate": 0.1, "train_func": train_mini_batch_gd,
          "train_params": {"batch_size": 16, "epochs": 200}},
